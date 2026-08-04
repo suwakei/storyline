@@ -1,69 +1,186 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import Link from "next/link";
+import { useRef, useState } from "react";
+
+import { Button, EmptyState, Field, Modal, TextInput } from "@/components/ui";
+import { downloadProject, parseProjectJson, withFreshIds } from "@/lib/io";
+import { formatDateTime, projectStats } from "@/lib/stats";
+import { useStore } from "@/lib/store";
+
+export default function ProjectListPage() {
+  const hydrated = useStore((s) => s.hydrated);
+  const projects = useStore((s) => s.projects);
+  const addProject = useStore((s) => s.addProject);
+  const deleteProject = useStore((s) => s.deleteProject);
+  const importProject = useStore((s) => s.importProject);
+
+  const [creating, setCreating] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleCreate = () => {
+    addProject(newTitle);
+    setNewTitle("");
+    setCreating(false);
+  };
+
+  const handleImport = async (file: File) => {
+    setError(null);
+    try {
+      const imported = parseProjectJson(await file.text());
+      const collides = projects.some((p) => p.id === imported.id);
+      if (
+        collides &&
+        !window.confirm(
+          `「${imported.title}」は既に開いています。上書きしますか？\n(キャンセルすると別の作品として取り込みます)`,
+        )
+      ) {
+        importProject(withFreshIds(imported));
+      } else {
+        importProject(imported);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "読み込みに失敗しました。");
+    }
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="mx-auto w-full max-w-5xl px-6 py-10">
+      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">storyline</h1>
+          <p className="text-muted mt-1 text-sm">
+            作品 → ストーリー → シークエンス → シーンで構成を組み立てる
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="flex gap-2">
+          <Button onClick={() => fileRef.current?.click()}>
+            JSONを読み込む
+          </Button>
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            ＋ 新しい作品
+          </Button>
         </div>
-      </main>
-    </div>
+      </header>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void handleImport(file);
+          e.target.value = "";
+        }}
+      />
+
+      {error && (
+        <p className="border-danger/40 bg-danger/10 text-danger mb-4 rounded-md border px-3 py-2 text-sm">
+          {error}
+        </p>
+      )}
+
+      {!hydrated ? (
+        <p className="text-muted py-16 text-center text-sm">読み込み中…</p>
+      ) : projects.length === 0 ? (
+        <EmptyState
+          title="まだ作品がありません"
+          description="新しい作品を作るか、書き出した JSON を読み込んでください。データはこのブラウザ内 (IndexedDB) に保存されます。"
+          action={
+            <Button variant="primary" onClick={() => setCreating(true)}>
+              ＋ 最初の作品を作る
+            </Button>
+          }
+        />
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {projects.map((project) => {
+            const stats = projectStats(project);
+            return (
+              <li
+                key={project.id}
+                className="bg-surface border-line hover:border-accent/60 rounded-xl border p-4 transition-colors"
+              >
+                <Link href={`/projects/${project.id}`} className="block">
+                  <h2 className="truncate font-semibold">{project.title}</h2>
+                  <p className="text-muted mt-0.5 line-clamp-2 min-h-[2rem] text-xs leading-relaxed">
+                    {project.summary || "説明なし"}
+                  </p>
+                </Link>
+
+                <dl className="text-muted mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                  <div>
+                    ストーリー <b className="text-fg">{stats.stories}</b>
+                  </div>
+                  <div>
+                    シークエンス <b className="text-fg">{stats.sequences}</b>
+                  </div>
+                  <div>
+                    シーン <b className="text-fg">{stats.scenes}</b>
+                  </div>
+                  <div>
+                    キャラ <b className="text-fg">{stats.characters}</b>
+                  </div>
+                </dl>
+
+                <div className="border-line mt-3 flex items-center justify-between border-t pt-3">
+                  <span className="text-muted text-xs">
+                    更新 {formatDateTime(project.updatedAt)}
+                  </span>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      onClick={() => downloadProject(project)}
+                    >
+                      書き出す
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `「${project.title}」を削除します。元に戻せません。よろしいですか？`,
+                          )
+                        )
+                          deleteProject(project.id);
+                      }}
+                    >
+                      削除
+                    </Button>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <Modal
+        open={creating}
+        onClose={() => setCreating(false)}
+        title="新しい作品"
+      >
+        <Field label="作品名">
+          <TextInput
+            autoFocus
+            value={newTitle}
+            placeholder="例: 夏の終わりの事件簿"
+            onChange={(e) => setNewTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleCreate();
+            }}
+          />
+        </Field>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button onClick={() => setCreating(false)}>キャンセル</Button>
+          <Button variant="primary" onClick={handleCreate}>
+            作成
+          </Button>
+        </div>
+      </Modal>
+    </main>
   );
 }

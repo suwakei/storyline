@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# storyline
 
-## Getting Started
+シナリオの構成（時系列）とキャラクターのつながりを整理するためのツール。
+フロントエンドのみで動作し、データはブラウザの IndexedDB に保存される。
 
-First, run the development server:
+## 構成
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+作品 (Project)
+└─ ストーリー (Story)          … 本編 / 外伝 などをタブで切り替え
+   └─ シークエンス (Sequence)  … カンバンの「列」
+      └─ シーン (Scene)        … カンバンの「カード」
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **時間の表し方** — 実日付は持たない。並び順そのものが時系列で、`timeLabel`
+  （例: `事件当日 早朝`）は自由テキストの表示ラベル。架空の暦でも破綻しない。
+- **シーンの項目** — タイトル / あらすじ / 登場キャラ / 時間ラベル / 場所 /
+  ステータス（プロット・執筆中・完了）/ メモ / サムネイル画像（任意）
+- **キャラクター** — 作品ごとに登録し、各シーンに複数紐づけられる。識別色を持つ。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 開発
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run dev     # http://localhost:3000
+npm run build
+npm run lint
+```
 
-## Learn More
+## データの保存とバックアップ
 
-To learn more about Next.js, take a look at the following resources:
+- 保存先はブラウザの IndexedDB（キー: `storyline-store-v1`）。
+  **ブラウザのサイトデータを消すと作品も消える。**
+- 作品カード / 作品画面の「書き出す」で `*.storyline.json` を出力できる。
+  取り込みは作品一覧の「JSONを読み込む」。別の端末やブラウザへはこれで移す。
+- サムネイルは読み込み時に長辺 640px の JPEG へ縮小し、data URL として
+  JSON にも含まれる（`src/lib/image.ts`）。
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## デプロイ
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Vercel にそのままデプロイできる（サーバ側の状態を持たない）。
 
-## Deploy on Vercel
+## 主なファイル
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| パス | 役割 |
+| --- | --- |
+| `src/lib/types.ts` | データモデルの定義 |
+| `src/lib/store.ts` | zustand ストア（永続化・全更新操作） |
+| `src/lib/io.ts` | JSON の書き出し / 読み込みと正規化 |
+| `src/components/board/` | カンバン（ドラッグ＆ドロップ） |
+| `src/components/SceneEditor.tsx` | シーン編集パネル |
+| `src/components/CharacterPanel.tsx` | キャラクター管理パネル |
