@@ -68,20 +68,17 @@ export const SCENE_STATUSES: {
   {
     value: "idea",
     label: "プロット",
-    className:
-      "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+    className: "bg-status-idea-bg text-status-idea",
   },
   {
     value: "draft",
     label: "執筆中",
-    className:
-      "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
+    className: "bg-status-draft-bg text-status-draft",
   },
   {
     value: "done",
     label: "完了",
-    className:
-      "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300",
+    className: "bg-status-done-bg text-status-done",
   },
 ];
 
@@ -89,16 +86,21 @@ export function statusMeta(status: SceneStatus) {
   return SCENE_STATUSES.find((s) => s.value === status) ?? SCENE_STATUSES[0];
 }
 
-/** キャラ追加時に順番に割り当てる色 */
-export const CHARACTER_COLORS = [
-  "#6366f1",
-  "#ec4899",
-  "#f59e0b",
-  "#10b981",
-  "#06b6d4",
-  "#8b5cf6",
-  "#ef4444",
-  "#84cc16",
-  "#f97316",
-  "#14b8a6",
+/**
+ * キャラ追加時に順番に割り当てる識別色。
+ * 高彩度の原色はカンバン上で並ぶと視覚的にうるさく、本文より目立ってしまうため、
+ * 彩度を落とした 10 色で「区別はつくが主張しない」ところに寄せている。
+ * `name` はスウォッチの読み上げ用 (色コードを読み上げても意味が伝わらない)。
+ */
+export const CHARACTER_COLORS: { name: string; value: string }[] = [
+  { name: "インディゴ", value: "#6b7bb5" },
+  { name: "モーヴ", value: "#9a83b8" },
+  { name: "ローズ", value: "#b8798f" },
+  { name: "テラコッタ", value: "#c0836f" },
+  { name: "サンド", value: "#bda06b" },
+  { name: "オリーブ", value: "#96a36d" },
+  { name: "セージ", value: "#71a288" },
+  { name: "ティール", value: "#6ba3a3" },
+  { name: "スカイ", value: "#6f9ac2" },
+  { name: "スレート", value: "#838d9c" },
 ];

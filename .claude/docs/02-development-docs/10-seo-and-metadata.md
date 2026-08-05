@@ -37,9 +37,10 @@ export const metadata: Metadata = {
 
 ## 3. 動的ルートの metadata
 
-`/projects/<id>` は**クライアントコンポーネント**で、データはブラウザ内にしかない。
-そのためサーバ側で作品名を metadata に出すことはできない (`generateMetadata` から
-IndexedDB は読めない)。
+`/projects/<id>` の `page.tsx` は Server Component になったが、**作品データは依然
+ブラウザ内 (IndexedDB) にしかない**。そのためサーバ側で作品名を metadata に出すことは
+できない (`generateMetadata` から IndexedDB は読めない)。中身を描く
+`ProjectWorkspace` はクライアントコンポーネントなので `metadata` を export できない。
 
 作品名をタブに出したい場合の選択肢:
 

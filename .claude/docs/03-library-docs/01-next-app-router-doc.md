@@ -26,13 +26,20 @@
 ## 2. このリポジトリのルート構成
 
 ```
-src/app/
-├─ layout.tsx                      ルートレイアウト (Server Component)
-├─ globals.css
-├─ page.tsx                        "/"                   ("use client")
-├─ favicon.ico
-└─ projects/[projectId]/page.tsx   "/projects/<id>"      ("use client")
+src/
+├─ proxy.ts                            Proxy (旧 middleware)。未ログインを /login へ飛ばす
+└─ app/
+   ├─ layout.tsx                       ルートレイアウト (Server Component)
+   ├─ globals.css
+   ├─ page.tsx                         "/"                    (Server Component)
+   ├─ favicon.ico
+   ├─ login/page.tsx                   "/login"               (Server Component)
+   ├─ api/auth/[...nextauth]/route.ts  "/api/auth/*"          (Auth.js のハンドラ)
+   └─ projects/[projectId]/page.tsx    "/projects/<id>"       (Server Component)
 ```
+
+各 `page.tsx` は **認証を検証してクライアントコンポーネントを 1 個描くだけ**にしてある
+(中身は `src/components/ProjectList.tsx` / `ProjectWorkspace.tsx` / `LoginCard.tsx`)。
 
 ### ルートレイアウト
 
@@ -52,29 +59,23 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
 
 ### 動的ルート
 
-このアプリのデータはブラウザ内 (IndexedDB) にあるため、作品画面は
-**クライアントコンポーネントで `useParams()` を使う**:
+`page.tsx` は認証の検証が要るので Server Component。`params` / `searchParams` は
+**Promise なので `await` で解き**、値はクライアントコンポーネントへ props で渡す:
 
 ```tsx
-"use client";
-import { useParams } from "next/navigation";
-
-export default function ProjectPage() {
-  const params = useParams<{ projectId: string }>();
-  const projectId = params.projectId;
-  …
+// src/app/projects/[projectId]/page.tsx
+export default async function ProjectPage({
+  params,
+}: PageProps<"/projects/[projectId]">) {
+  const { projectId } = await params;
+  await requireSession(`/projects/${projectId}`);
+  return <ProjectWorkspace projectId={projectId} />;
 }
 ```
 
-Server Component / 非同期取得が要る場合は `params` を解く:
+Client Component で props として受ける場合は `use()` で解く:
 
 ```tsx
-// Server Component
-export default async function Page({ params }: PageProps<"/projects/[projectId]"> ) {
-  const { projectId } = await params;
-}
-
-// Client Component (props で受ける場合)
 import { use } from "react";
 export default function Page({ params }: PageProps<"/projects/[projectId]">) {
   const { projectId } = use(params);
@@ -83,22 +84,36 @@ export default function Page({ params }: PageProps<"/projects/[projectId]">) {
 
 **`params` を同期的なオブジェクトとして扱わない** (Next.js 15 以前の書き方)。
 
+`PageProps<"/login">` のようなルート文字列の型はビルド時に生成される。ルートを追加した
+直後は `npx tsc --noEmit` が `does not satisfy the constraint 'AppRoutes'` で落ちるので、
+**先に `npm run build` を 1 回通して型を再生成する**。
+
 ---
 
 ## 3. クライアント / サーバの境界
 
-このアプリでは **ストアを読む画面はすべて `"use client"`**。IndexedDB はブラウザにしか無く、
-サーバでは初期化できないため。
+**作品データのストアを読む画面はすべて `"use client"`**。IndexedDB はブラウザにしか無く、
+サーバでは初期化できないため。一方 **認証だけはサーバ側にある**。
 
-| 使えるもの | 使わないもの (このプロジェクトに存在しない) |
+| ある | 用途 |
 | --- | --- |
-| Client Component / hooks | Server Actions (`"use server"`) |
-| `useParams` / `useRouter` / `Link` | Route Handler (`app/api/**/route.ts`) |
-| `metadata` (静的) | `cookies()` / `headers()` / `proxy` |
-| `next/font` | ISR / `revalidate` / データキャッシュ |
+| Client Component / hooks | 画面の中身 (`src/components/**`)。作品データはここでしか触らない |
+| Server Component | `app/**/page.tsx`。`auth()` で認証を検証してから中身を描く |
+| Server Function (`"use server"`) | [src/lib/auth-actions.ts](../../../src/lib/auth-actions.ts) のログイン / ログアウトのみ |
+| Route Handler | `app/api/auth/[...nextauth]/route.ts` (Auth.js のハンドラ) のみ |
+| Proxy (`src/proxy.ts`) | 未ログインを `/login` へ飛ばす楽観的リダイレクト |
 
-サーバを追加する提案は「サーバを持たない」という前提の変更にあたるため、
-実装前にユーザ確認が必要 ([CLAUDE.md](../../CLAUDE.md))。
+| まだ無い | 備考 |
+| --- | --- |
+| 作品データの Server Function / API | 作品は依然 IndexedDB。Postgres 移行は別増分 |
+| ISR / `revalidate` / データキャッシュ | 認証付きページはすべて動的 (`ƒ`) |
+
+**`middleware.ts` を作らない。** Next.js 16 で非推奨になり `proxy.ts` にリネームされた
+(`node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md`)。
+また公式は「Proxy を完全な認証・認可の解決策として使うな」と明記しているので、
+**認可の判定は必ず各ページ / Server Function 内で `auth()` を呼んで行う**。
+
+作品データをサーバへ載せる提案は移行スコープの変更にあたるため、実装前にユーザ確認が必要。
 
 ---
 
@@ -110,8 +125,9 @@ import Link from "next/link";
 ```
 
 - ページ間遷移は `Link`。`window.location` を使わない
-- 遷移は 2 画面だけ (一覧 ↔ 作品画面)。パネルはドロワーで表現する
+- ログイン後の遷移は 2 画面だけ (一覧 ↔ 作品画面)。パネルはドロワーで表現する
   ([01-architecture-design.md](../02-development-docs/01-architecture-design.md))
+- `/login` への遷移はリダイレクト (`redirect()` / `proxy.ts`) で起きるので `Link` は張らない
 
 ---
 
@@ -146,9 +162,14 @@ export const metadata: Metadata = {
 | [tsconfig.json](../../../tsconfig.json) | `paths: { "@/*": ["./src/*"] }`、`.next/types` を include |
 | [eslint.config.mjs](../../../eslint.config.mjs) | flat config。`eslint-config-next` の core-web-vitals + typescript |
 | [postcss.config.mjs](../../../postcss.config.mjs) | `@tailwindcss/postcss` のみ |
+| [prisma.config.ts](../../../prisma.config.ts) | Prisma 7 の CLI 設定。**接続 URL は schema.prisma に書けない**ので、`datasource.url` はここが正。`.env` も自前で読む |
+| `.env` (`.env.example` がひな形) | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` / `AUTH_SECRET` / `DATABASE_URL` / `AUTH_INVITE_CODE` |
 
 インポートは `@/` エイリアスを使う (`@/lib/store` / `@/components/ui`)。
 相対パスの `../../` を書かない。
+
+`@prisma/client` は Next の既定の外部パッケージ一覧に入っているので、
+`serverExternalPackages` を足す必要は無い。
 
 ---
 
@@ -159,4 +180,10 @@ node_modules/next/dist/docs/01-app/01-getting-started/03-layouts-and-pages.md
 node_modules/next/dist/docs/01-app/02-guides/single-page-applications.md
 node_modules/next/dist/docs/01-app/02-guides/upgrading/version-16.md
 node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/page.md
+node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md
+node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md
+node_modules/next/dist/docs/01-app/02-guides/authentication.md
 ```
+
+Auth.js v5 (`next-auth@beta`) の API も推測で書かず、`node_modules/next-auth/index.d.ts` と
+`node_modules/@auth/core/index.d.ts` の型定義を読んで確認する。

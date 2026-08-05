@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 type ButtonVariant = "primary" | "subtle" | "ghost" | "danger";
+/**
+ * "touch" は md 未満で 44px のタップ領域を確保し、md 以上は既存サイズへ戻す。
+ * PC のカンバンは情報密度が価値なので、既定 ("md") のサイズは変えない。
+ */
+type ButtonSize = "md" | "touch";
 
 const BUTTON_STYLES: Record<ButtonVariant, string> = {
   primary: "bg-accent text-accentfg hover:opacity-90",
@@ -11,34 +16,50 @@ const BUTTON_STYLES: Record<ButtonVariant, string> = {
   danger: "text-danger hover:bg-danger/10",
 };
 
+const BUTTON_SIZE_STYLES: Record<ButtonSize, string> = {
+  md: "",
+  touch: "min-h-11 md:min-h-0",
+};
+
 export function Button({
   variant = "subtle",
+  size = "md",
   className = "",
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
+  size?: ButtonSize;
 }) {
   return (
     <button
       type="button"
       {...props}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${BUTTON_STYLES[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${BUTTON_STYLES[variant]} ${BUTTON_SIZE_STYLES[size]} ${className}`}
     />
   );
 }
 
+const ICON_BUTTON_SIZE_STYLES: Record<ButtonSize, string> = {
+  md: "h-7 w-7",
+  touch: "h-11 w-11 md:h-7 md:w-7",
+};
+
 export function IconButton({
   label,
+  size = "md",
   className = "",
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  label: string;
+  size?: ButtonSize;
+}) {
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
       {...props}
-      className={`text-muted hover:bg-surface2 hover:text-fg inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${className}`}
+      className={`text-muted hover:bg-surface2 hover:text-fg inline-flex items-center justify-center rounded-md transition-colors ${ICON_BUTTON_SIZE_STYLES[size]} ${className}`}
     />
   );
 }
@@ -81,6 +102,13 @@ export function TextArea({
       className={`${INPUT_CLASS} resize-y leading-relaxed ${className}`}
     />
   );
+}
+
+export function Select({
+  className = "",
+  ...props
+}: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return <select {...props} className={`${INPUT_CLASS} ${className}`} />;
 }
 
 /**
@@ -240,6 +268,37 @@ export function Drawer({
           </div>
         )}
       </aside>
+    </div>
+  );
+}
+
+type BannerTone = "danger" | "neutral";
+
+const BANNER_STYLES: Record<BannerTone, string> = {
+  danger: "border-danger/40 bg-danger/10 text-danger",
+  neutral: "border-line bg-surface2 text-fg",
+};
+
+/**
+ * 1 行の通知帯。エラー (danger) と完了通知 (neutral) の 2 トーンだけ持つ。
+ * 各画面にコピペされていた `border-danger/40 bg-danger/10 …` を集約したもので、
+ * 新しい見た目は増やしていない。
+ */
+export function Banner({
+  tone = "neutral",
+  action,
+  children,
+}: {
+  tone?: BannerTone;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={`flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm ${BANNER_STYLES[tone]}`}
+    >
+      <div className="min-w-0 leading-relaxed">{children}</div>
+      {action && <div className="shrink-0">{action}</div>}
     </div>
   );
 }

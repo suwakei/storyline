@@ -1,6 +1,7 @@
 # ビルドとデプロイ
 
-サーバ側の状態を持たないため、デプロイは単純。**環境変数もシークレットも無い。**
+作品データはブラウザの IndexedDB にあるが、**認証は Auth.js + Postgres でサーバ側にある**。
+そのため環境変数とシークレットが要る (`.env.example` がひな形)。
 
 ---
 
@@ -8,7 +9,10 @@
 
 | コマンド | 用途 | Claude が実行してよいか |
 | --- | --- | --- |
-| `npm run dev` | 開発サーバ (http://localhost:3000) | **不可** (ユーザが自分のターミナルで動かす) |
+| `npm run dev` | 開発サーバ (http://localhost:4000) | **不可** (ユーザが自分のターミナルで動かす) |
+| `docker compose up -d` | ローカル Postgres (ホスト側 5434) | **不可** (DB もサーバ。ユーザが起動する) |
+| `npx prisma migrate dev` | マイグレーション適用 | **不可** (DB 接続が要る) |
+| `npx prisma generate` | Prisma Client 生成 | 可 (DB 不要。`postinstall` でも走る) |
 | `npm run build` | 本番ビルド | 可 |
 | `npm run start` | ビルド成果物の起動 | **不可** (サーバを立てるため) |
 | `npm run lint` | ESLint | 可 |
@@ -21,16 +25,21 @@ Next.js 16 では **Turbopack が既定**。`--turbopack` フラグは不要
 
 ## 2. デプロイ先
 
-Vercel にそのまま載る。設定は不要:
+Vercel に載る:
 
-- ビルドコマンド `npm run build`、出力は自動検出
-- Node ランタイムは使うが、**サーバ側の状態を持たない** (API Route も Server Action も無い)
-- 環境変数は 0 個
+- ビルドコマンド `npm run build`、出力は自動検出。`postinstall` で `prisma generate` が走る
+- Node ランタイム。認証は Server Component / Server Function / Route Handler / Proxy を使う
+- **環境変数が要る**: `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` / `AUTH_SECRET` / `DATABASE_URL` /
+  `AUTH_INVITE_CODE` (`AUTH_INVITE_CODE` が未設定だと**新規ユーザを作れない**。
+  既存ユーザのログインは通る)
+- Google Cloud Console の「承認済みのリダイレクト URI」に
+  `<オリジン>/api/auth/callback/google` を登録する (dev は `http://localhost:4000/...`)
+- 作品データは依然ブラウザの IndexedDB。**DB に載っているのは User / Account / Session だけ**
 
-`output: "export"` (静的エクスポート) は現状**使っていない**。
-使う場合、動的ルート `/projects/[projectId]` に `generateStaticParams` が必要になるが、
-id はユーザのブラウザ内で生成されるため事前に列挙できない。
-静的化したいなら、ルーティングをクエリパラメータ (`/?project=<id>`) に変える設計変更が要る。
+`output: "export"` (静的エクスポート) は**使えない**。認証が動的レンダリングを要求するため
+(`npm run build` の出力でも `/` `/login` `/projects/[projectId]` はすべて `ƒ` になる)。
+加えて、動的ルート `/projects/[projectId]` の id はユーザのブラウザ内で生成されるので
+`generateStaticParams` で事前に列挙することもできない。
 
 ---
 

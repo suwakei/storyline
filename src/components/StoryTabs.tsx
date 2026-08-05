@@ -59,6 +59,7 @@ export function StoryTabs({
               <>
                 <IconButton
                   label="左へ移動"
+                  size="touch"
                   disabled={index === 0}
                   className="disabled:opacity-30"
                   onClick={() => moveStory(projectId, index, index - 1)}
@@ -67,6 +68,7 @@ export function StoryTabs({
                 </IconButton>
                 <IconButton
                   label="右へ移動"
+                  size="touch"
                   disabled={index === stories.length - 1}
                   className="disabled:opacity-30"
                   onClick={() => moveStory(projectId, index, index + 1)}
@@ -75,6 +77,7 @@ export function StoryTabs({
                 </IconButton>
                 <IconButton
                   label="このストーリーを削除"
+                  size="touch"
                   disabled={stories.length <= 1}
                   className="hover:text-danger disabled:opacity-30"
                   onClick={() => {

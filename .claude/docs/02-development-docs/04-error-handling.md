@@ -1,7 +1,14 @@
 # エラー処理
 
-サーバもエラー監視も無いため、エラー処理は **「ユーザに何が起きたか伝える」** ことが全て。
+エラー監視サービスは無く、作品データの読み書きもすべてブラウザ内で完結するため、
+エラー処理は **「ユーザに何が起きたか伝える」** ことが全て。
 例外クラス階層やエラーコード体系は導入しない (このアプリの規模に対して過剰)。
+
+例外は認証まわりだけ。**Auth.js 既定のエラーページ (英語) は使わず**、
+`/login?error=<code>` を [src/lib/auth-errors.ts](../../../src/lib/auth-errors.ts) で
+日本語の文言に落として `/login` 上に `Banner tone="danger"` で出す。
+コードは Auth.js 由来 (`AccessDenied` ほか) と招待コード由来 (`InviteCode*` /
+`TooManyAttempts`) の 2 系統あるが、**分類表はこの 1 ファイルだけに置く。**
 
 ---
 
@@ -49,15 +56,18 @@ try {
 }
 ```
 
-表示は `danger` トークンのバナーで、操作の近くに置く:
+表示は `ui.tsx` の `Banner` (`tone="danger"`) で、操作の近くに置く:
 
 ```tsx
 {error && (
-  <p className="border-danger/40 bg-danger/10 text-danger mb-4 rounded-md border px-3 py-2 text-sm">
-    {error}
-  </p>
+  <div className="mb-4">
+    <Banner tone="danger">{error}</Banner>
+  </div>
 )}
 ```
+
+- 完了通知など「警告ではないもの」は `tone="neutral"` を使い、`danger` トークンを流用しない
+- クラス名を各画面に書き写さない (`border-danger/40 bg-danger/10 …` のコピペは `Banner` に集約済み)
 
 - 新しい操作を始めたら `setError(null)` で消す (古いエラーを残さない)
 - `alert()` は使わない (操作を止めるうえ、文脈から離れる)

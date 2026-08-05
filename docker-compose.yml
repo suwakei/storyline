@@ -1,0 +1,38 @@
+# storyline — ローカル開発用の Postgres
+#
+# 本番は Neon (Vercel Marketplace 経由) を使う。これはローカル開発専用。
+# 決裁記録: .claude/.company/secretary/decisions/2026-08-04-accounts-and-server-decisions.md
+#
+# 操作は package.json の npm scripts 経由が正:
+#   npm run db:up      起動
+#   npm run db:down    停止 (データは残る)
+#   npm run db:logs    ログ追尾
+#   npm run db:psql    psql に入る
+#   npm run db:reset   ボリュームごと破棄して作り直す ← ローカルのデータが消える
+#
+# ホスト側ポートは 5430。他プロジェクトの DB コンテナと並列で動かすため、
+# よく使われる 5432 (proveai-postgres) / 5433 (pairbrush-postgres) を避けている。
+
+services:
+  postgres:
+    # 本番の Neon は Postgres 17 系だが、他プロジェクトと揃えて 16-alpine を使う。
+    # メジャーバージョン差が問題になったら 17-alpine に上げる。
+    image: postgres:16-alpine
+    container_name: storyline-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: storyline
+      POSTGRES_PASSWORD: storyline
+      POSTGRES_DB: storyline
+    ports:
+      - "5430:5432"
+    volumes:
+      - storyline-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U storyline -d storyline"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  storyline-pgdata:

@@ -51,7 +51,7 @@ export function createCharacter(
   return {
     id: newId(),
     name: "",
-    color: CHARACTER_COLORS[index % CHARACTER_COLORS.length],
+    color: CHARACTER_COLORS[index % CHARACTER_COLORS.length].value,
     role: "",
     note: "",
     ...patch,

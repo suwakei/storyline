@@ -2,10 +2,25 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { Button, Drawer, Field, TextArea, TextInput } from "@/components/ui";
+import {
+  Button,
+  Drawer,
+  Field,
+  Select,
+  TextArea,
+  TextInput,
+} from "@/components/ui";
 import { fileToThumbnail } from "@/lib/image";
 import { useStore } from "@/lib/store";
-import { SCENE_STATUSES, type Character, type Scene } from "@/lib/types";
+import {
+  SCENE_STATUSES,
+  type Character,
+  type Scene,
+  type Sequence,
+} from "@/lib/types";
+
+/** 末尾に挿入したいときの番兵 (Board.tsx の APPEND と同じ考え方) */
+const APPEND = Number.MAX_SAFE_INTEGER;
 
 /**
  * シーン編集パネル。
@@ -17,20 +32,27 @@ export function SceneEditor({
   projectId,
   storyId,
   scene,
+  sequenceId,
   sequenceTitle,
+  sequences,
   characters,
   onClose,
 }: {
   projectId: string;
   storyId: string;
   scene: Scene;
+  /** シーンが現在所属しているシークエンスの id (所属シークエンス欄の除外・移動先に使う) */
+  sequenceId: string;
   sequenceTitle: string;
+  /** 所属シークエンスの移動先候補。ストーリー内のシークエンス一覧 */
+  sequences: Sequence[];
   characters: Character[];
   onClose: () => void;
 }) {
   const updateScene = useStore((s) => s.updateScene);
   const deleteScene = useStore((s) => s.deleteScene);
   const duplicateScene = useStore((s) => s.duplicateScene);
+  const moveScene = useStore((s) => s.moveScene);
 
   const [draft, setDraft] = useState<Scene>(scene);
   const [imageError, setImageError] = useState<string | null>(null);
@@ -100,6 +122,7 @@ export function SceneEditor({
         <>
           <Button
             variant="danger"
+            size="touch"
             onClick={() => {
               if (!window.confirm("このシーンを削除します。よろしいですか？"))
                 return;
@@ -112,6 +135,7 @@ export function SceneEditor({
           </Button>
           <div className="flex gap-2">
             <Button
+              size="touch"
               onClick={() => {
                 duplicateScene(projectId, storyId, draft.id);
                 onClose();
@@ -119,7 +143,7 @@ export function SceneEditor({
             >
               複製
             </Button>
-            <Button variant="primary" onClick={onClose}>
+            <Button variant="primary" size="touch" onClick={onClose}>
               閉じる
             </Button>
           </div>
@@ -171,6 +195,31 @@ export function SceneEditor({
         </div>
       </Field>
 
+      {sequences.length > 1 && (
+        <Field label="所属シークエンス">
+          <Select
+            value=""
+            className="min-h-11"
+            onChange={(e) => {
+              const toSequenceId = e.target.value;
+              if (!toSequenceId) return;
+              moveScene(projectId, storyId, draft.id, toSequenceId, APPEND);
+            }}
+          >
+            <option value="" disabled>
+              移動先のシークエンスを選ぶ
+            </option>
+            {sequences
+              .filter((sequence) => sequence.id !== sequenceId)
+              .map((sequence) => (
+                <option key={sequence.id} value={sequence.id}>
+                  {sequence.title || "無題のシークエンス"}へ移動
+                </option>
+              ))}
+          </Select>
+        </Field>
+      )}
+
       <Field label="あらすじ">
         <TextArea
           rows={5}
@@ -196,19 +245,27 @@ export function SceneEditor({
                 key={character.id}
                 type="button"
                 onClick={() => toggleCharacter(character.id)}
+                aria-pressed={active}
                 className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
                   active
-                    ? "border-transparent text-white"
+                    ? "text-fg font-medium"
                     : "border-line text-muted hover:text-fg"
                 }`}
-                style={active ? { background: character.color } : undefined}
+                /* 選択中もキャラ色でベタ塗りせず、背景に薄く混ぜるだけにする。
+                   淡いキャラ色の上に白文字を乗せると読めなくなるため */
+                style={
+                  active
+                    ? {
+                        background: `color-mix(in oklab, ${character.color} 18%, var(--surface))`,
+                        borderColor: `color-mix(in oklab, ${character.color} 45%, var(--surface))`,
+                      }
+                    : undefined
+                }
               >
                 <span
                   aria-hidden="true"
                   className="h-2 w-2 rounded-full"
-                  style={{
-                    background: active ? "rgba(255,255,255,.85)" : character.color,
-                  }}
+                  style={{ background: character.color }}
                 />
                 {character.name || "名称未設定"}
               </button>

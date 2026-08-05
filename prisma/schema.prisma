@@ -1,0 +1,255 @@
+// storyline — サーバ移行のスキーマ草案
+//
+// 対応チケット: .claude/.company/dev/tasks/2026-08-04-accounts-and-server-data-migration.md
+// 対応仕様:     .claude/.company/planning/specs/2026-08-04-accounts-and-server-spec.md
+//
+// 相関図ぶん (Relationship / CharacterGroup / Character.x,y,groupId) は別フィーチャの受け皿。
+// 後から足すとマイグレーションが 1 本増えるので、最初のマイグレーションに同梱する。
+// 対応チケット: .claude/.company/dev/tasks/2026-08-04-character-relationship-graph-data-migration.md
+// 対応仕様:     .claude/.company/planning/specs/2026-08-04-character-relationship-graph-spec.md
+//
+// 方針:
+// - 件数・文字数の上限は Server Action の入口 (バリデーション層) で担保し、DB 制約にしない。
+//   上限を変えるたびにマイグレーションを打ちたくないため。DB に置くのは同一性の制約だけ。
+// - 並び順は order 列 (疎な整数) で持つ。詳細はチケットの「決定 2」。
+// - order に一意制約を張らない。上下ボタンでの並べ替えを 2 行の order 交換で実装するため、
+//   トランザクション途中で一時的に値が重複する。読み出しは常に (order asc, id asc) で解決する。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7 では接続 URL を schema に書けない (`url` は廃止)。
+// URL は prisma.config.ts に置き、PrismaClient にはドライバアダプタを渡す。
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// 認証 (Auth.js / @auth/prisma-adapter の標準スキーマに準拠)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+
+  accounts Account[]
+  sessions Session[]
+  projects Project[]
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Google のみの構成では書き込まれない。email / Magic Link を足したときに要るので
+// アダプタの標準スキーマどおり残す (空テーブルのコストはほぼゼロ)。
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// 作品データ (src/lib/types.ts の写し)
+//
+// id は @default(cuid()) を付けない。src/lib/factory.ts の newId() (nanoid(12)) で
+// アプリ側が採番する。取り込みで withFreshIds() をそのまま使うため、また id の形式を
+// 1 種類に保つため (Auth.js 側のモデルはアダプタが行を作るので cuid のまま)。
+// ---------------------------------------------------------------------------
+
+enum SceneStatus {
+  idea
+  draft
+  done
+}
+
+// 相関の向き。データ上の向きは常に fromId -> toId で、この値は矢印の描き方だけを変える。
+// 「双方向」を 2 行で表さないのは、片方だけ消えた状態・片方だけラベルが違う状態を
+// 作れてしまうため。
+enum RelationshipDirection {
+  forward
+  both
+  none
+}
+
+model Project {
+  id      String @id
+  userId  String
+  title   String
+  summary String @default("")
+  // updatedAt は @updatedAt にしない。
+  // (1) 取り込み時に旧 JSON の値をそのまま復元する必要がある
+  // (2) 子孫 (シーン等) の編集でも進めたいが、@updatedAt は自分の行の更新しか見ない
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stories         Story[]
+  characters      Character[]
+  relationships   Relationship[]
+  characterGroups CharacterGroup[]
+
+  // 一覧は「最近編集した順」で全件取得する (ページングしない)
+  @@index([userId, updatedAt(sort: Desc)])
+}
+
+model Story {
+  id        String @id
+  projectId String
+  title     String
+  summary   String @default("")
+  order     Int
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sequences Sequence[]
+
+  @@index([projectId, order])
+}
+
+model Sequence {
+  id      String @id
+  storyId String
+  title   String
+  summary String @default("")
+  order   Int
+
+  story  Story   @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  scenes Scene[]
+
+  @@index([storyId, order])
+}
+
+model Scene {
+  id         String      @id
+  sequenceId String
+  title      String      @default("")
+  summary    String      @default("")
+  timeLabel  String      @default("")
+  place      String      @default("")
+  status     SceneStatus @default(idea)
+  memo       String      @default("")
+  // Vercel Blob の URL。ローカル版の Scene.thumbnail (data URL) から意味が変わる。
+  // 未設定は null (書き出し JSON では キーごと省略する)
+  thumbnailUrl String?
+  order        Int
+
+  sequence Sequence         @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  cast     SceneCharacter[]
+
+  @@index([sequenceId, order])
+}
+
+model Character {
+  id        String @id
+  projectId String
+  name      String @default("")
+  color     String
+  role      String @default("")
+  note      String @default("")
+  order     Int
+
+  // 相関図の論理座標。x と y は両方揃って初めて「配置済み」を意味する。
+  // 片方だけ・NaN・Infinity はアプリ側 (io.ts と描画の導出) で未配置に落とす。
+  // DB では強制しない (上限や業務ルールを DB 制約にしない方針と同じ)。
+  x Float?
+  y Float?
+
+  // 所属グループ。グループ側に memberIds を持たせず Character 側に置くことで、
+  // 「1 キャラは同時に最大 1 グループ」を型として保証する。
+  // グループを消してもキャラは残すので Cascade ではなく SetNull。
+  groupId String?
+
+  project           Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  group             CharacterGroup?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  scenes            SceneCharacter[]
+  relationshipsFrom Relationship[]   @relation("RelationshipFrom")
+  relationshipsTo   Relationship[]   @relation("RelationshipTo")
+
+  @@index([projectId, order])
+  @@index([groupId])
+}
+
+// 相関図の関係 (ラベル付き有向エッジ)。
+// 並べ替え UI は無いが order を持つのは、書き出し JSON との往復で配列順が変わると
+// 関係リストの並びが開くたびに変わってしまうため (順序の保持そのものが仕様)。
+// 自己ループ (fromId == toId) の禁止と「同じ作品に属すること」は DB では強制できないので
+// SceneCharacter と同じく Server Action 側で担保する。
+model Relationship {
+  id        String                @id
+  projectId String
+  fromId    String
+  toId      String
+  label     String                @default("")
+  direction RelationshipDirection @default(forward)
+  order     Int
+
+  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // キャラを消したら関係も消える (ローカル版の deleteCharacter の掃除と等価)
+  from    Character @relation("RelationshipFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to      Character @relation("RelationshipTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, order])
+  @@index([fromId])
+  @@index([toId])
+}
+
+// グループ枠。枠の位置・大きさ・色は持たない。
+// メンバーノードの外接矩形から毎回算出するので、「枠の外にメンバーが居る」状態が作れない。
+model CharacterGroup {
+  id        String @id
+  projectId String
+  name      String @default("")
+  order     Int
+
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  characters Character[]
+
+  @@index([projectId, order])
+}
+
+// Scene.characterIds の中間表。
+// scene と character が同じ作品に属することは DB では強制できないので
+// (複合 FK にするには projectId の非正規化が要る)、Server Action 側で担保する。
+model SceneCharacter {
+  sceneId     String
+  characterId String
+
+  scene     Scene     @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@id([sceneId, characterId])
+  @@index([characterId])
+}

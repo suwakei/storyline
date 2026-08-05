@@ -25,7 +25,11 @@ export function CharacterPanel({
       footer={
         <>
           <span className="text-muted text-xs">{characters.length} 人</span>
-          <Button variant="primary" onClick={() => addCharacter(projectId)}>
+          <Button
+            variant="primary"
+            size="touch"
+            onClick={() => addCharacter(projectId)}
+          >
             ＋ 追加
           </Button>
         </>
@@ -89,20 +93,26 @@ export function CharacterPanel({
           />
 
           <div className="flex flex-wrap gap-1 pt-0.5">
-            {CHARACTER_COLORS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                aria-label={`色を ${color} にする`}
-                onClick={() => updateCharacter(projectId, character.id, { color })}
-                className={`h-5 w-5 rounded-full transition-transform ${
-                  character.color === color
-                    ? "ring-fg ring-offset-surface scale-110 ring-2 ring-offset-1"
-                    : "hover:scale-110"
-                }`}
-                style={{ background: color }}
-              />
-            ))}
+            {CHARACTER_COLORS.map(({ name, value }) => {
+              const selected = character.color === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  aria-label={`色を${name}にする`}
+                  aria-pressed={selected}
+                  onClick={() =>
+                    updateCharacter(projectId, character.id, { color: value })
+                  }
+                  className={`h-5 w-5 rounded-full transition-transform ${
+                    selected
+                      ? "ring-fg ring-offset-surface scale-110 ring-2 ring-offset-1"
+                      : "hover:scale-110"
+                  }`}
+                  style={{ background: value }}
+                />
+              );
+            })}
           </div>
         </div>
       ))}

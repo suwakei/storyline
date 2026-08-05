@@ -7,6 +7,11 @@
 
 **ここは storyline で最も壊れやすい箇所**。触る前に全体像を把握すること。
 
+このドキュメントは `md` (768px) 以上のカンバン (PC 表示) が対象。`md` 未満の縦リスト
+([MobileSequenceList](../../../src/components/board/MobileSequenceList.tsx)) は
+ドラッグを使わず `▲ / ▼` ボタンで並べ替える別実装 (2026-08-04)。
+詳細は [06-ui-design.md](./06-ui-design.md) の「レスポンシブ方針」章を参照。
+
 ---
 
 ## 1. 何がドラッグできるか

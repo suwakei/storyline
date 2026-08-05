@@ -1,28 +1,54 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f5f6f8;
-  --surface: #ffffff;
-  --surface-2: #eef0f4;
-  --line: #dfe3e9;
-  --fg: #14171c;
-  --muted: #6b7280;
-  --accent: #4f46e5;
-  --accent-fg: #ffffff;
-  --danger: #dc2626;
+  /* ネイティブ UI (スクロールバー / フォームコントロール / 初期キャンバス色) を
+     OS のテーマ設定に自動追従させる。これが無いと初期表示で白フラッシュが出る */
+  color-scheme: light dark;
+
+  /* 彩度 (oklch の C) は意図的に低く抑えている。作家が長時間見る画面なので、
+     色は「情報の区別」に足りる最小限だけ持たせ、彩度で主張させない */
+  --bg: oklch(0.975 0.003 265);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.955 0.005 265);
+  --line: oklch(0.895 0.007 265);
+  --fg: oklch(0.22 0.012 265);
+  --muted: oklch(0.53 0.015 265);
+  --accent: oklch(0.47 0.085 255);
+  --accent-fg: oklch(0.99 0 0);
+  --danger: oklch(0.52 0.13 25);
+
+  --status-idea: oklch(0.45 0.012 265);
+  --status-idea-bg: oklch(0.94 0.005 265);
+  --status-draft: oklch(0.48 0.075 70);
+  --status-draft-bg: oklch(0.94 0.035 80);
+  --status-done: oklch(0.46 0.065 155);
+  --status-done-bg: oklch(0.94 0.03 155);
+
+  --scrollbar-thumb: var(--line);
+  --scrollbar-track: transparent;
+
+  /* チェックボックス等のネイティブ UI をアクセント色に合わせる */
+  accent-color: var(--accent);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0d0f13;
-    --surface: #161a20;
-    --surface-2: #1d222a;
-    --line: #2a3038;
-    --fg: #e7e9ec;
-    --muted: #97a0ad;
-    --accent: #7d81f5;
-    --accent-fg: #0d0f13;
-    --danger: #f87171;
+    --bg: oklch(0.19 0.008 265);
+    --surface: oklch(0.235 0.009 265);
+    --surface-2: oklch(0.275 0.01 265);
+    --line: oklch(0.34 0.012 265);
+    --fg: oklch(0.92 0.006 265);
+    --muted: oklch(0.68 0.012 265);
+    --accent: oklch(0.72 0.075 250);
+    --accent-fg: oklch(0.19 0.01 265);
+    --danger: oklch(0.7 0.11 25);
+
+    --status-idea: oklch(0.74 0.01 265);
+    --status-idea-bg: oklch(0.3 0.008 265);
+    --status-draft: oklch(0.8 0.065 80);
+    --status-draft-bg: oklch(0.31 0.035 75);
+    --status-done: oklch(0.79 0.055 158);
+    --status-done-bg: oklch(0.3 0.03 155);
   }
 }
 
@@ -36,6 +62,12 @@
   --color-accent: var(--accent);
   --color-accentfg: var(--accent-fg);
   --color-danger: var(--danger);
+  --color-status-idea: var(--status-idea);
+  --color-status-idea-bg: var(--status-idea-bg);
+  --color-status-draft: var(--status-draft);
+  --color-status-draft-bg: var(--status-draft-bg);
+  --color-status-done: var(--status-done);
+  --color-status-done-bg: var(--status-done-bg);
   --font-sans: var(--font-geist-sans);
 }
 
@@ -47,15 +79,24 @@ body {
     "Noto Sans JP", "Yu Gothic UI", system-ui, sans-serif;
 }
 
-/* カンバンの横スクロールバーを控えめにする */
-.thin-scroll::-webkit-scrollbar {
-  height: 10px;
-  width: 10px;
+/* カンバンの横スクロールバーを控えめにする。
+   macOS はオーバーレイスクロールバーを使うため、scrollbar-width を明示しないと
+   scrollbar-color が無視される */
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
-.thin-scroll::-webkit-scrollbar-thumb {
-  background: var(--line);
-  border-radius: 9999px;
-}
-.thin-scroll::-webkit-scrollbar-track {
-  background: transparent;
+
+@supports not (scrollbar-color: auto) {
+  .thin-scroll::-webkit-scrollbar {
+    height: 10px;
+    width: 10px;
+  }
+  .thin-scroll::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 9999px;
+  }
+  .thin-scroll::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
 }
